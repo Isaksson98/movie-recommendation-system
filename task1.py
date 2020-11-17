@@ -5,6 +5,7 @@ from scipy.sparse import csr_matrix
 import matplotlib.pyplot as plt
 import math
 from sklearn.metrics import mean_squared_error
+from scipy import spatial
 
 
 
@@ -80,15 +81,13 @@ def task1(train_set, test_set):
     np.clip(r_prediction_arr, lowerBound, upperBound, out=r_prediction_arr)
 
 
-    print(r_prediction_arr.shape)
-    print(test_ratings.shape)
-    print(ratings.shape)
-
-    RMSE_test = np.sqrt(np.mean((r_prediction_arr-test_ratings)**2))
+    vect = test_ratings-r_prediction_arr
+    vect2 = np.square(vect)
+    RMSE_test = np.sqrt(np.mean(vect2))
     #diff_train = r_prediction_arr-ratings
     #RMSE verification.training is 0.891 and for verification.test is 0.905.
     print('RMSE:')
-    print(RMSE_test)
+    #print(RMSE_test)
     rms = math.sqrt(mean_squared_error(test_ratings, r_prediction_arr))
     print(rms)
     #RMSE_train = np.sqrt(diff_train**2)
@@ -111,7 +110,7 @@ def task1(train_set, test_set):
     #plt.xlabel('Data');
     #plt.title('Train')
     #plt.show()
-    print('plot')
+
 
     b_user2 = ans[:max(user_ids)] #first part of vector
     b_movies2 = ans[-max(movie_ids):] #second part of vector
@@ -129,10 +128,6 @@ def task1(train_set, test_set):
     np.clip(target, lowerBound, upperBound, out=target)
 
 
-    print(target.shape)
-    print(test_ratings.shape)
-    print(ratings.shape)
-
     rms2 = math.sqrt(mean_squared_error(ratings, target))
     #RMSE_train = np.sqrt(np.mean((target-ratings)*(target-ratings)))
     
@@ -142,34 +137,88 @@ def task1(train_set, test_set):
     print(rms2)
     return r_prediction_arr
 
-r_prediction_arr = task1(verification_train_data, verification_test_data)
+baseline_prediction = task1(verification_train_data, verification_test_data)
 
 ###TASK 2###
-print('task2')
-user_id_t2 = train_data[task2_train_data.columns[0]]
-movie_id_t2 = train_data[task2_train_data.columns[1]]
-ratings_t2 = train_data[task2_train_data.columns[2]]
+def task2(train_set, test_set, baseline_prediction):
+    user_ids = np.array(train_set[ train_set.columns[0]])
+    movie_ids = np.array(train_set[ train_set.columns[1]])
+    ratings = np.array(train_set[ train_set.columns[2]])
 
-#r_pred = r_prediction_arr.round(decimals=3).T
-#r_tilde = ratings_t2 - r_pred 
+    test_user_ids = np.array(test_set[ test_set.columns[0]])
+    test_movie_ids = np.array(test_set[ test_set.columns[1]])
+    test_ratings = np.array(test_set[ test_set.columns[2]])
+    print('')
 
-def cosSimilarity(movie1_id, movie2_id):
-    x=0
+    r_tilde_ = np.subtract(test_ratings, np.transpose(baseline_prediction))
+    r_tilde = r_tilde_[0]
+    
+    print('shapes: ')
+    print(test_ratings.shape)
+    print(r_tilde.shape)
+    
+    new_prediction = []
+    m = 5
+    L = 100
+    for i in range(L):
+       
+        cos_sim = cosSimilarity(m, movie_ids[i], user_ids, movie_ids, ratings, train_set)[0]
+        num1 = cos_sim * r_tilde[i]
+        num2 = abs(cos_sim)
+        num3 = num1/num2
+        new_prediction.append(num3)
+
+    prediction=np.array(new_prediction) #improved prediction rating
+    
+    print(ratings.shape)
+    print(prediction.shape)
+
+    rms = math.sqrt(mean_squared_error(ratings, prediction))
+
+    return rms
+
+
+def cosSimilarity(movie1_id, movie2_id, users, movies, ratings, train_set):
+    x = 0
     temp1 = 0
     temp2 = 0
     temp3 = 0
 
-    for i in range(len(user_id_t2)):
-        temp1 += ratings_t2[movie1_id]*ratings_t2[movie2_id]
-        temp2 += ratings_t2[movie1_id]**2
-        temp3 += ratings_t2[movie2_id]**2
+    ids_movie1 = np.asarray(np.where( (movies == movie1_id) )) #Index of all movies 1
+    ids_movie2 = np.asarray(np.where( (movies == movie2_id) )) #index of all movies 2
 
-    x = math.sqrt(temp1)/(math.sqrt(temp2)*math.sqrt(temp3))
-    return x
+    users_movies1 = users[ids_movie1] #Users that rated film1
+    users_movies2 = users[ids_movie2] #Users that rated film2
+    
+    ratings_mov1 = ratings[ids_movie1]
+    ratings_mov2 = ratings[ids_movie2]
 
-print(cosSimilarity(2,5))
-print(cosSimilarity(3,6))
-print(cosSimilarity(4,7))
-print(cosSimilarity(5,8))
-print(cosSimilarity(6,9))
-print(cosSimilarity(9,9))
+    num4 = np.asarray(np.intersect1d(users_movies1, users_movies2)) #List of users that rated film 1 & 2
+
+    rating_index1 = []
+    rating_index2 = []
+
+    for i in ids_movie1[0]:
+
+        if (users[i] in num4):
+            rating_index1.append(ratings[i])
+
+    for k in ids_movie2[0]:
+        if users[k] in num4:
+            rating_index2.append(ratings[k])
+
+    for j in range(len(num4)):
+        
+        temp1 += rating_index1[j]*rating_index2[j]
+        temp2 += rating_index1[j]**2
+        temp3 += rating_index2[j]**2
+
+    x = temp1/(math.sqrt(temp2)*math.sqrt(temp3))
+    result = 1 - spatial.distance.cosine(rating_index1, rating_index2)
+
+    return [x,result]
+
+final_prediction = task2(verification_train_data, verification_test_data, baseline_prediction)
+print('Result: ')
+print(final_prediction)
+print('Bettar than 0.891 & 0.905.')
