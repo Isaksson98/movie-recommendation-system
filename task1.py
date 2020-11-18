@@ -157,28 +157,22 @@ def task2(train_set, test_set, baseline_prediction):
     print(test_ratings.shape)
     print(r_tilde.shape)
     
-    new_prediction = []
-    m = 5
+    num_test = 0
+    correction = []
     L = 100
-    for i in range(L):
-       
-        cos_sim = cosSimilarity(m, movie_ids[i], user_ids, movie_ids, ratings, train_set)[0]
-        num1 = cos_sim * r_tilde[i]
-        num2 = abs(cos_sim)
-        num3 = num1/num2
-        new_prediction.append(num3)
-
-    prediction=np.array(new_prediction) #improved prediction rating
+    print('main')
+    for m in range(1,max(movie_ids)):
+        print('movie_', m)
+        correction.append( correction_term(m, L, user_ids, movie_ids, ratings, r_tilde, num_test) )
     
-    print(ratings.shape)
-    print(prediction.shape)
+    final_prediction = baseline_prediction + correction
 
-    rms = math.sqrt(mean_squared_error(ratings, prediction))
+    rms = math.sqrt(mean_squared_error(ratings, final_prediction))
 
     return rms
 
 
-def cosSimilarity(movie1_id, movie2_id, users, movies, ratings, train_set):
+def cosSimilarity(movie1_id, movie2_id, users, movies, ratings):
     x = 0
     temp1 = 0
     temp2 = 0
@@ -194,7 +188,7 @@ def cosSimilarity(movie1_id, movie2_id, users, movies, ratings, train_set):
     ratings_mov2 = ratings[ids_movie2]
 
     num4 = np.asarray(np.intersect1d(users_movies1, users_movies2)) #List of users that rated film 1 & 2
-
+    #num4 = 0 if user haven't rated both movies
     rating_index1 = []
     rating_index2 = []
 
@@ -212,13 +206,40 @@ def cosSimilarity(movie1_id, movie2_id, users, movies, ratings, train_set):
         temp1 += rating_index1[j]*rating_index2[j]
         temp2 += rating_index1[j]**2
         temp3 += rating_index2[j]**2
+    #1190
+    #print('users_movies1', users_movies1)
+    #print('users_movies2', users_movies2)
+    #print('num4: ', len(num4))
+    #print('rating: ', rating_index1[j])
+    #print('rating: ', rating_index2[j])
 
-    x = temp1/(math.sqrt(temp2)*math.sqrt(temp3))
+    if(len(num4)==0):
+        x=0
+    else:
+        x = temp1/(math.sqrt(temp2)*math.sqrt(temp3))
     result = 1 - spatial.distance.cosine(rating_index1, rating_index2)
 
     return [x,result]
 
-final_prediction = task2(verification_train_data, verification_test_data, baseline_prediction)
+def correction_term(m, L, user_ids, movie_ids, ratings, r_tilde, num_test):
+    new_prediction = []
+    num_test += 1
+    print('correction', num_test)
+    for i in range(L):
+       
+        cos_sim = cosSimilarity(m, movie_ids[i], user_ids, movie_ids, ratings)[0]
+        num1 = cos_sim * r_tilde[i]
+        num2 = abs(cos_sim)
+        num3 = num1/num2
+        new_prediction.append(num3)
+
+    correction=np.array(new_prediction) #improved prediction rating
+
+    return correction
+
+
+
+final_prediction_rms = task2(verification_train_data, verification_test_data, baseline_prediction)
 print('Result: ')
-print(final_prediction)
-print('Bettar than 0.891 & 0.905.')
+print(final_prediction_rms)
+print('Better than 0.891 & 0.905.')
