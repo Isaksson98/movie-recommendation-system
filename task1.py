@@ -6,20 +6,19 @@ import matplotlib.pyplot as plt
 import math
 from sklearn.metrics import mean_squared_error
 from scipy import spatial
-
+import time
 
 
 #each row in dara: u,m,r: 
 
-#train_data = pd.read_csv("C:/Users/Filip/Skola/TSKS33/lab2/data/filis220.training", header=None)
-#test_data = pd.read_csv("C:/Users/Filip/Skola/TSKS33/lab2/data/filis220.test", header=None)
+train_data = pd.read_csv("C:/Users/Filip/Skola/TSKS33/lab2/data/filis220.training", header=None)
+test_data = pd.read_csv("C:/Users/Filip/Skola/TSKS33/lab2/data/filis220.test", header=None)
 
-#task2_test_data = pd.read_csv("C:/Users/Filip/Skola/TSKS33/lab2/data/task---2.test", header=None)
-#task2_train_data = pd.read_csv("C:/Users/Filip/Skola/TSKS33/lab2/data/task---2.training", header=None)
+task2_test_data = pd.read_csv("C:/Users/Filip/Skola/TSKS33/lab2/data/task---2.test", header=None)
+task2_train_data = pd.read_csv("C:/Users/Filip/Skola/TSKS33/lab2/data/task---2.training", header=None)
 
 verification_test_data = pd.read_csv("C:/Users/Filip/Skola/TSKS33/lab2/data/verification.test", header=None)
 verification_train_data = pd.read_csv("C:/Users/Filip/Skola/TSKS33/lab2/data/verification.training", header=None)
-
 
 
 def create_matrix_A(train_set):
@@ -51,7 +50,7 @@ def create_matrix_A(train_set):
 
     return sparse_matrix
 
-A = create_matrix_A(verification_train_data)
+A = create_matrix_A(task2_train_data)
 def task1(train_set, test_set):
 
     user_ids = np.array(train_set[ train_set.columns[0]])
@@ -84,33 +83,26 @@ def task1(train_set, test_set):
     vect = test_ratings-r_prediction_arr
     vect2 = np.square(vect)
     RMSE_test = np.sqrt(np.mean(vect2))
-    #diff_train = r_prediction_arr-ratings
-    #RMSE verification.training is 0.891 and for verification.test is 0.905.
-    print('RMSE:')
+
+    print('RMSE (test):')
     #print(RMSE_test)
     rms = math.sqrt(mean_squared_error(test_ratings, r_prediction_arr))
     print(rms)
     #RMSE_train = np.sqrt(diff_train**2)
+    r_pred = np.rint(r_prediction_arr).astype(int)[0]
+    
+    r = test_ratings-np.transpose(r_pred)
+    rating_plot = np.abs(r) 
 
-    #H1 = np.rint(RMSE_test).astype(int)
-    #H2 = np.rint(RMSE_train).astype(int)
+    #print('H: ', rating_plot)
+    #print('H[0]: ', rating_plot[0])
 
-    #print(RMSE_train.mean())
-
-
-    #plt.subplot(2,2,1)
-    #plt.hist(H1, bins=[1,2,3,4,5])  # `density=False` would make counts
-    #plt.ylabel('Probability')
-    #plt.xlabel('Data');
-    #plt.title('Test')
-
-    #plt.subplot(2,2,2)
-    #plt.hist(H2, bins=5)  # `density=False` would make counts
-    #plt.ylabel('Probability')
-    #plt.xlabel('Data');
-    #plt.title('Train')
+    #fig = plt.figure(figsize =(10, 7)) 
+    #plt.hist(rating_plot, bins=[1,2,3,4,5])  # `density=False` would make counts
+    #plt.ylabel('Number')
+    #plt.xlabel('Error');
+    #plt.title('Absolute errors')
     #plt.show()
-
 
     b_user2 = ans[:max(user_ids)] #first part of vector
     b_movies2 = ans[-max(movie_ids):] #second part of vector
@@ -122,7 +114,6 @@ def task1(train_set, test_set):
     
     target=np.array(r_prediction2) #baseline prediction rating
 
-
     lowerBound=1
     upperBound=5
     np.clip(target, lowerBound, upperBound, out=target)
@@ -132,114 +123,126 @@ def task1(train_set, test_set):
     #RMSE_train = np.sqrt(np.mean((target-ratings)*(target-ratings)))
     
     #RMSE verification.training is 0.891 and for verification.test is 0.905.
-    print('RMSE:')
+    print('RMSE (train):')
     #print(RMSE_train)
     print(rms2)
-    return r_prediction_arr
+    return [r_prediction_arr, target] #test, train
 
-baseline_prediction = task1(verification_train_data, verification_test_data)
+[baseline_prediction_test, baseline_prediction_train] = task1(task2_train_data, task2_test_data)
 
 ###TASK 2###
-def task2(train_set, test_set, baseline_prediction):
-    user_ids = np.array(train_set[ train_set.columns[0]])
-    movie_ids = np.array(train_set[ train_set.columns[1]])
-    ratings = np.array(train_set[ train_set.columns[2]])
+def task2(data_set, baseline_prediction, d, r_tilde_matrix):
+    user_ids = np.array(data_set[ data_set.columns[0]])
+    movie_ids = np.array(data_set[ data_set.columns[1]])
+    ratings = np.array(data_set[ data_set.columns[2]])
 
-    test_user_ids = np.array(test_set[ test_set.columns[0]])
-    test_movie_ids = np.array(test_set[ test_set.columns[1]])
-    test_ratings = np.array(test_set[ test_set.columns[2]])
-    print('')
-
-    r_tilde_ = np.subtract(test_ratings, np.transpose(baseline_prediction))
-    r_tilde = r_tilde_[0]
-    
-    print('shapes: ')
-    print(test_ratings.shape)
-    print(r_tilde.shape)
-    
-    num_test = 0
-    correction = []
     L = 100
-    print('main')
-    for m in range(1,max(movie_ids)):
-        print('movie_', m)
-        correction.append( correction_term(m, L, user_ids, movie_ids, ratings, r_tilde, num_test) )
+
+    #Calculates the correction term
+    correction = []
+    correction = np.asarray( correction_term(d, L, r_tilde_matrix, user_ids, movie_ids) )
+
+
+    final_prediction = np.add(correction, np.transpose(baseline_prediction))
+
+    rms = math.sqrt(mean_squared_error(ratings, np.transpose( final_prediction )))
     
-    final_prediction = baseline_prediction + correction
-
-    rms = math.sqrt(mean_squared_error(ratings, final_prediction))
-
     return rms
 
 
-def cosSimilarity(movie1_id, movie2_id, users, movies, ratings):
+def cosSimilarity(movie1_id, movie2_id, M):
+   
     x = 0
-    temp1 = 0
-    temp2 = 0
-    temp3 = 0
+    temp1=0
+    temp2=0
+    temp3=0
+    res = 0
 
-    ids_movie1 = np.asarray(np.where( (movies == movie1_id) )) #Index of all movies 1
-    ids_movie2 = np.asarray(np.where( (movies == movie2_id) )) #index of all movies 2
+    u_min = 10
+   
+    ids1 = np.where( (M[:,movie1_id-1] == 0) ) #Index of all users that movies 1 that user didn't rate
+    ids2 = np.where( (M[:,movie2_id-1] == 0) ) #index of all movies 2 that user didn't rate
 
-    users_movies1 = users[ids_movie1] #Users that rated film1
-    users_movies2 = users[ids_movie2] #Users that rated film2
+    ids_tot = np.concatenate((ids1, ids2), axis=1) #Add them together
+
+    # Remove all ratings that that isn't users that rated both films. Left with the overlap
+    M_arr1 = np.delete(M[:,movie1_id-1], (ids_tot), axis=0) 
+    M_arr2 = np.delete(M[:,movie2_id-1], (ids_tot), axis=0)
     
-    ratings_mov1 = ratings[ids_movie1]
-    ratings_mov2 = ratings[ids_movie2]
-
-    num4 = np.asarray(np.intersect1d(users_movies1, users_movies2)) #List of users that rated film 1 & 2
-    #num4 = 0 if user haven't rated both movies
-    rating_index1 = []
-    rating_index2 = []
-
-    for i in ids_movie1[0]:
-
-        if (users[i] in num4):
-            rating_index1.append(ratings[i])
-
-    for k in ids_movie2[0]:
-        if users[k] in num4:
-            rating_index2.append(ratings[k])
-
-    for j in range(len(num4)):
-        
-        temp1 += rating_index1[j]*rating_index2[j]
-        temp2 += rating_index1[j]**2
-        temp3 += rating_index2[j]**2
-    #1190
-    #print('users_movies1', users_movies1)
-    #print('users_movies2', users_movies2)
-    #print('num4: ', len(num4))
-    #print('rating: ', rating_index1[j])
-    #print('rating: ', rating_index2[j])
-
-    if(len(num4)==0):
-        x=0
+    if len(M_arr1) < u_min:
+        x = 0
     else:
+        #x = 1 - spatial.distance.cosine(M_arr1, M_arr2)
+        for j in range(len(M_arr1)):
+            temp1 += M_arr1[j]*M_arr2[j]
+            temp2 += M_arr1[j]**2
+            temp3 += M_arr2[j]**2
         x = temp1/(math.sqrt(temp2)*math.sqrt(temp3))
-    result = 1 - spatial.distance.cosine(rating_index1, rating_index2)
 
-    return [x,result]
+    return x
 
-def correction_term(m, L, user_ids, movie_ids, ratings, r_tilde, num_test):
-    new_prediction = []
-    num_test += 1
-    print('correction', num_test)
-    for i in range(L):
-       
-        cos_sim = cosSimilarity(m, movie_ids[i], user_ids, movie_ids, ratings)[0]
-        num1 = cos_sim * r_tilde[i]
-        num2 = abs(cos_sim)
-        num3 = num1/num2
-        new_prediction.append(num3)
+def correction_term(cos_sim, L, r_tilde, users, movies):
+    
+    num1=0
+    num2=0
+    correction = []
+    for i in range(len(movies)):
+        L_indecies = np.argsort(cos_sim[ movies[i]-1 ,:]) #Sort movies j for each movie i and get index
+        a2 = L_indecies[-L:] #Indices for the largest L cosine movies
 
-    correction=np.array(new_prediction) #improved prediction rating
+        for l in a2:
+            num1 += cos_sim[ movies[i]-1 ][l] * r_tilde[ users[i]-1 ][l]
+            num2 += abs(cos_sim[ movies[i]-1 ][l])
+
+        
+        #If L is too large and u_min is too large. one of the largest cos-sim
+        # will include 0 ==> avoid division by zero
+        if(num2==0):
+            #print('zero')
+            correction.append( 0 )
+        else:
+            correction.append( (num1/num2) )
+
+        num1=0
+        num2=0
 
     return correction
 
 
+def create_rating_matrix(user_id, movie_id, ratings):
 
-final_prediction_rms = task2(verification_train_data, verification_test_data, baseline_prediction)
-print('Result: ')
-print(final_prediction_rms)
-print('Better than 0.891 & 0.905.')
+    M = np.zeros(shape=(max(user_id),max(movie_id)))
+    for i in range(len(ratings)):
+        M[user_id[i]-1,movie_id[i]-1]=ratings[i]
+    
+    return M
+
+def calculate_d(data_set, baseline_prediction):
+    user_ids = np.array(data_set[ data_set.columns[0]])
+    movie_ids = np.array(data_set[ data_set.columns[1]])
+    ratings = np.array(data_set[ data_set.columns[2]])
+
+    r_tilde = np.subtract(ratings, np.transpose(baseline_prediction))
+    r_tilde_matrix = create_rating_matrix(user_ids, movie_ids, r_tilde[0])
+
+    cos_sim = []
+
+    #Creates the cos-similarity matrix
+    for m1 in range(1,max(movie_ids)+1):
+        for m2 in range(1,max(movie_ids)+1):
+            cos_sim.append( cosSimilarity(m1, m2, r_tilde_matrix))
+       
+    cos_sim = np.asarray(cos_sim)
+    d = cos_sim.reshape(max(movie_ids),max(movie_ids))
+    return [d, r_tilde_matrix]
+
+[d, r_tilde_matrix] = calculate_d(task2_train_data, baseline_prediction_train)
+
+final_prediction_rms_test = task2(task2_test_data, baseline_prediction_test, d, r_tilde_matrix)
+print('RMSE (test) - improved: ')
+print(final_prediction_rms_test)
+
+final_prediction_rms_train = task2(task2_train_data, baseline_prediction_train, d, r_tilde_matrix)
+
+print('RMSE (train) - improved: ')
+print(final_prediction_rms_train)
